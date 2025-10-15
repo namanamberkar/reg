@@ -19,14 +19,15 @@
 <body class="bg-gray-50 min-h-screen p-4 sm:p-8">
 
     <!-- Header and Admin Menu Button -->
-    <header class="max-w-6xl mx-auto relative mb-10">
-        <h1 class="text-4xl font-extrabold text-gray-900 text-center">
+    <header class="max-w-6xl mx-auto relative mb-10 pt-2 pb-2">
+        <!-- Added pr-12 (padding-right) to prevent title overlap with the button -->
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 text-center pr-12">
             Guest Registration System
         </h1>
         
-        <!-- Hamburger Menu Button to open Admin Sidebar -->
+        <!-- UPDATED: Added top-4 and right-4 for better mobile touch target spacing -->
         <button id="menu-button" onclick="toggleAdminMenu()" 
-                class="text-gray-900 hover:text-blue-600 transition p-2 rounded-full absolute top-0 right-0 z-30 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="text-gray-900 hover:text-blue-600 transition p-2 rounded-full absolute top-4 right-4 z-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Toggle Admin Menu">
             <!-- Hamburger Icon (Menu) -->
             <svg id="menu-icon-open" class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -67,6 +68,25 @@
                 <span id="guest-count" class="text-sm font-medium text-green-600">0 Records</span>
             </h3>
             
+            <!-- Date Filter Inputs (New Section) -->
+            <div class="mb-4 p-4 bg-green-100 rounded-lg shadow-inner">
+                <h4 class="font-semibold text-green-700 mb-2">Filter by Registration Date:</h4>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label for="start-date" class="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                        <input type="date" id="start-date" class="w-full p-2 border border-green-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label for="end-date" class="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                        <input type="date" id="end-date" class="w-full p-2 border border-green-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <!-- UPDATED: Added ID for event listener -->
+                <button id="apply-filter-button" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition shadow-md">
+                    Apply Filter
+                </button>
+            </div>
+            
             <div id="guest-table-container" class="scrollable-table overflow-x-auto">
                 <table class="min-w-full divide-y divide-green-200">
                     <thead class="bg-green-100">
@@ -78,7 +98,7 @@
                         </tr>
                     </thead>
                     <tbody id="guest-list-body" class="bg-white divide-y divide-gray-200">
-                        <!-- Data rows inserted here -->
+                        <!-- Data rows inserted here (or skeleton rows while loading) -->
                     </tbody>
                 </table>
             </div>
@@ -222,7 +242,13 @@
                 // Set up auth listener to manage admin view and load data
                 supabase.auth.onAuthStateChange((event, session) => {
                     updateAdminView(session);
-                    if (session) loadGuests(); 
+                    // Load guests when admin successfully logs in
+                    if (session) {
+                         // Reset filters to default on login
+                         document.getElementById('start-date').value = '';
+                         document.getElementById('end-date').value = '';
+                         loadGuests(); 
+                    }
                 });
 
                 // Initial check
@@ -281,7 +307,7 @@
             }
         }
         
-        /** New function to handle secure file download for the logged-in Admin */
+        /** Handles secure file download for the logged-in Admin */
         async function downloadFile(publicUrl) {
             if (!publicUrl) {
                 showStatus("No file URL available for download.", true);
@@ -332,29 +358,109 @@
 
 
         // --- Data Fetching Logic (Admin Only) ---
+        
+        /** Shows the loading skeleton animation in the table */
+        function showLoadingSkeleton() {
+            const body = document.getElementById('guest-list-body');
+            body.innerHTML = ''; // Clear existing content
+            document.getElementById('guest-list-empty').classList.add('hidden');
+            
+            // Show 5 pulsing skeleton rows
+            for (let i = 0; i < 5; i++) {
+                const row = document.createElement('tr');
+                // Use animate-pulse and slight background for the effect
+                row.className = 'animate-pulse bg-white border-b border-gray-100';
+                
+                // Helper function to create a cell with a placeholder bar
+                const createSkeletonCell = (widthClass) => {
+                    const cell = row.insertCell();
+                    cell.className = 'px-3 py-4 whitespace-nowrap';
+                    cell.innerHTML = `<div class="h-4 bg-gray-200 rounded ${widthClass}"></div>`;
+                    return cell;
+                };
 
-        /** Fetches all guest records from the database */
-        async function loadGuests() {
-            // RLS Policy 2 (SELECT) allows authenticated users to read ALL records.
-            const { data, error } = await supabase
+                // Reg ID
+                createSkeletonCell('w-1/3');
+                
+                // Name
+                createSkeletonCell('w-3/4');
+                
+                // Phone
+                createSkeletonCell('w-2/3');
+
+                // Proof (centered placeholder)
+                const proofCell = row.insertCell();
+                proofCell.className = 'px-3 py-4 whitespace-nowrap text-center';
+                proofCell.innerHTML = '<div class="h-4 bg-gray-200 rounded w-4/5 mx-auto"></div>';
+
+                body.appendChild(row);
+            }
+            document.getElementById('guest-count').textContent = `Loading...`;
+        }
+
+
+        /** Reads the date inputs and calls loadGuests to filter the data */
+        function filterGuests() {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            // Simple validation: If end date is set but before start date, warn the user.
+            if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+                 showStatus("Start Date cannot be after End Date.", true);
+                 return;
+            }
+
+            if (!startDate && !endDate) {
+                 showStatus("Filter cleared: showing all records.", false);
+            } else {
+                 showStatus("Applying date filter...", false);
+            }
+            
+            loadGuests(startDate, endDate);
+        }
+
+        /** Fetches all guest records from the database, optionally filtered by date range */
+        async function loadGuests(startDate = null, endDate = null) {
+            
+            // 1. Show loading skeleton while fetching
+            showLoadingSkeleton();
+            
+            let query = supabase
                 .from('guests')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*');
+            
+            // Apply date filters if provided
+            if (startDate) {
+                // We append T00:00:00.000Z to the date input to compare at the start of the day
+                query = query.gte('created_at', `${startDate}T00:00:00.000Z`);
+            }
+            
+            if (endDate) {
+                // We append T23:59:59.999Z to the date input to compare up to the end of the day
+                query = query.lte('created_at', `${endDate}T23:59:59.999Z`);
+            }
+
+            // Always order by created_at descending
+            query = query.order('created_at', { ascending: false });
+
+            // RLS Policy 2 (SELECT) allows authenticated users to read ALL records.
+            const { data, error } = await query;
 
             if (error) {
                 console.error("Fetch Error:", error);
                 // This error likely means the SELECT RLS policy is wrong
                 showStatus(`Error loading guests: ${error.message}. Check SELECT RLS Policy.`, true);
+                renderGuestList([]); // Clear skeletons and show empty message
                 return;
             }
-
+            
             renderGuestList(data || []);
         }
 
         /** Renders the guest list table */
         function renderGuestList(guests) {
             const body = document.getElementById('guest-list-body');
-            body.innerHTML = '';
+            body.innerHTML = ''; // This clears the skeleton rows
             document.getElementById('guest-count').textContent = `${guests.length} Records`;
 
             if (guests.length === 0) {
@@ -498,6 +604,9 @@
             document.getElementById('registration-form').addEventListener('submit', handleRegister);
             document.getElementById('admin-login-form').addEventListener('submit', handleAdminLogin);
             
+            // Event Listener for the Filter Button
+            document.getElementById('apply-filter-button').addEventListener('click', filterGuests);
+
             // File size validation listener
             document.getElementById('id-proof').addEventListener('change', (e) => {
                 const file = e.target.files[0];
