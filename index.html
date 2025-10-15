@@ -1,119 +1,284 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Guest Registration</title>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <style>
-    body { font-family: system-ui, Arial; padding: 20px; max-width: 700px; margin: auto; }
-    input, select { width: 100%; padding: 6px; margin: 4px 0; }
-    button { padding: 10px 20px; margin-top: 10px; }
-  </style>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest Registration</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- CRITICAL FIX: 'defer' is now correctly applied here to give the script time to load -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+    <style>
+        /* Custom font for better look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
 </head>
-<body>
-  <h1>Guest Registration</h1>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+    <div class="max-w-xl mx-auto bg-white shadow-xl rounded-xl p-6 sm:p-8 space-y-6">
 
-  <div id="auth-area">
-    <button id="signup-btn">Sign in / Sign up (email)</button>
-    <span id="user-info"></span>
-  </div>
+        <header class="text-center border-b pb-4">
+            <h1 class="text-3xl font-bold text-gray-800">Guest Registration</h1>
+        </header>
 
-  <form id="guestForm">
-    <label>Full name<br><input id="full_name" required /></label><br>
-    <label>Email (optional)<br><input id="email" type="email" /></label><br>
-    <label>Phone<br><input id="phone" /></label><br>
-    <label>ID type<br>
-      <select id="id_type">
-        <option>Aadhaar</option>
-        <option>PAN</option>
-        <option>Passport</option>
-      </select>
-    </label><br>
-    <label>Upload ID proof (image or PDF)<br><input id="id_file" type="file" accept="image/*,.pdf" required /></label><br>
-    <button type="submit">Register Guest</button>
-  </form>
+        <!-- Auth Area -->
+        <div id="auth-area" class="flex flex-col sm:flex-row items-center justify-between p-4 bg-indigo-50 rounded-lg shadow-inner">
+            <span id="user-info" class="text-sm font-medium text-indigo-700">Checking status...</span>
+            <button id="signup-btn" class="mt-3 sm:mt-0 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">
+                Sign in / Sign up (email)
+            </button>
+        </div>
 
-  <p id="status"></p>
+        <!-- Guest Registration Form -->
+        <form id="guestForm" class="space-y-4">
+            <div>
+                <label for="full_name" class="block text-sm font-medium text-gray-700 mb-1">Full name <span class="text-red-500">*</span></label>
+                <input id="full_name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
+            </div>
+
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email (optional)</label>
+                <input id="email" type="email" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
+            </div>
+
+            <div>
+                <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
+                <input id="phone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
+            </div>
+
+            <div>
+                <label for="id_type" class="block text-sm font-medium text-gray-700 mb-1">ID type <span class="text-red-500">*</span></label>
+                <select id="id_type" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                    <option>Aadhaar</option>
+                    <option>PAN</option>
+                    <option>Passport</option>
+                    <option>Driver's License</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="id_file" class="block text-sm font-medium text-gray-700 mb-1">Upload ID proof (image or PDF) <span class="text-red-500">*</span></label>
+                <input id="id_file" type="file" accept="image/*,.pdf" required class="w-full p-3 border border-gray-300 rounded-lg bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition duration-150" />
+            </div>
+
+            <button type="submit" class="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
+                Register Guest
+            </button>
+        </form>
+
+        <!-- Status Message -->
+        <p id="status" class="text-center pt-4 text-sm text-gray-600 font-medium"></p>
+    </div>
+
+    <!-- Custom Modal/Message Box (Replaces alert/prompt) -->
+    <div id="modal-container" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50 transition-opacity duration-300">
+        <div id="modal-content" class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all duration-300 scale-100 space-y-4">
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800">Message </h3>
+            <p id="modal-body" class="text-gray-600"></p>
+            <div id="modal-actions" class="flex justify-end space-x-3">
+                <button id="modal-ok" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">OK</button>
+            </div>
+        </div>
+    </div>
 
 <script>
-const SUPABASE_URL = "https://hsyydplvjavkzksmwahy.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_uhkMvHhagzi2aRBPj5r4rQ_70-LfLrS";
-const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// --- Supabase and Global Utilities ---
 
-const status = document.getElementById('status');
-const userInfo = document.getElementById('user-info');
-const signupBtn = document.getElementById('signup-btn');
+// Use a simple custom modal instead of alert/prompt
+function showMessage(title, message, isPrompt = false, callback = null) {
+    const container = document.getElementById('modal-container');
+    const titleEl = document.getElementById('modal-title');
+    const bodyEl = document.getElementById('modal-body');
+    const actionsEl = document.getElementById('modal-actions');
 
-async function updateUserInfo(){
-  const { data } = await supabase.auth.getUser();
-  if (data.user) {
-    userInfo.textContent = "Signed in: " + (data.user.email || data.user.id);
-    signupBtn.style.display = 'none';
-  } else {
-    userInfo.textContent = "Not signed in";
-    signupBtn.style.display = 'inline-block';
-  }
+    titleEl.textContent = title;
+    
+    // Clear previous actions
+    actionsEl.innerHTML = '';
+    
+    if (isPrompt) {
+        bodyEl.innerHTML = `<input id="prompt-input" type="email" placeholder="Email address" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />`;
+        
+        const okButton = document.createElement('button');
+        okButton.id = 'modal-prompt-ok';
+        okButton.className = 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition';
+        okButton.textContent = 'Submit';
+        okButton.onclick = () => {
+            const email = document.getElementById('prompt-input').value;
+            container.classList.add('hidden');
+            container.classList.remove('flex');
+            if (callback) callback(email);
+        };
+
+        const cancelButton = document.createElement('button');
+        cancelButton.id = 'modal-prompt-cancel';
+        cancelButton.className = 'px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition';
+        cancelButton.textContent = 'Cancel';
+        cancelButton.onclick = () => {
+            container.classList.add('hidden');
+            container.classList.remove('flex');
+            if (callback) callback(null);
+        };
+        
+        actionsEl.append(cancelButton, okButton);
+
+    } else {
+        bodyEl.textContent = message;
+        
+        const okButton = document.createElement('button');
+        okButton.id = 'modal-ok';
+        okButton.className = 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition';
+        okButton.textContent = 'OK';
+        okButton.onclick = () => {
+            container.classList.add('hidden');
+            container.classList.remove('flex');
+            if (callback) callback();
+        };
+
+        actionsEl.appendChild(okButton);
+    }
+
+    container.classList.add('flex');
+    container.classList.remove('hidden');
 }
 
-signupBtn.addEventListener('click', async () => {
-  const email = prompt('Enter email for sign-in (magic link):');
-  if (!email) return;
-  const { error } = await supabase.auth.signInWithOtp({ email });
-  if (error) alert('Auth error: ' + error.message);
-  else alert('Check your email for the sign-in link.');
-});
+// Main logic is inside window.onload to guarantee all elements and scripts are loaded.
+window.onload = function() {
 
-updateUserInfo();
-supabase.auth.onAuthStateChange((event, session) => {
-  updateUserInfo();
-});
+    // Initialize Supabase. This should now work reliably due to the 'defer' attribute.
+    const SUPABASE_URL = "https://hsyydplvjavkzksmwahy.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_uhkMvHhagzi2aRBPj5r4rQ_70-LfLrS";
+    // Check if window.supabase is defined, thanks to the 'defer' fix
+    if (window.supabase) {
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-document.getElementById('guestForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  status.textContent = 'Working...';
 
-  const file = document.getElementById('id_file').files[0];
-  const full_name = document.getElementById('full_name').value;
-  const email = document.getElementById('email').value || null;
-  const phone = document.getElementById('phone').value || null;
-  const id_type = document.getElementById('id_type').value;
+        // --- DOM Elements & Initial Setup ---
 
-  const { data: userData } = await supabase.auth.getUser();
-  let userId = userData.user ? userData.user.id : crypto.randomUUID();
+        const statusEl = document.getElementById('status');
+        const userInfoEl = document.getElementById('user-info');
+        const signupBtn = document.getElementById('signup-btn');
+        const guestForm = document.getElementById('guestForm');
 
-  const timestamp = Date.now();
-  const safeFileName = file.name.replace(/\s+/g, '_');
-  const path = `${userId}/${timestamp}_${safeFileName}`;
+        // Update user info display
+        async function updateUserInfo(){
+            const { data } = await supabase.auth.getUser();
+            if (data.user) {
+                userInfoEl.textContent = "Signed in: " + (data.user.email || data.user.id);
+                signupBtn.style.display = 'none';
+            } else {
+                userInfoEl.textContent = "Not signed in. Sign-in to register guests.";
+                signupBtn.style.display = 'inline-block';
+            }
+        }
 
-  const { data: uploadData, error: uploadError } = await supabase
-    .storage.from('id_proofs')
-    .upload(path, file);
+        // Magic link login (uses custom modal)
+        signupBtn.addEventListener('click', () => {
+            showMessage(
+                'Sign In / Sign Up',
+                'Enter your email address to receive a magic sign-in link:',
+                true, // isPrompt
+                async (email) => {
+                    if (!email) return;
 
-  if (uploadError) {
-    status.textContent = "Upload failed: " + uploadError.message;
-    return;
-  }
+                    statusEl.textContent = 'Sending magic link...';
+                    const { error } = await supabase.auth.signInWithOtp({ email });
 
-  const { error: insertError } = await supabase
-    .from('guests')
-    .insert([{
-      full_name,
-      email,
-      phone,
-      id_type,
-      id_proof_path: uploadData.path,
-      created_by: userId,
-      consent: { accepted_at: new Date().toISOString(), text: "Guest registration" }
-    }]);
+                    if (error) {
+                        showMessage('Auth Error', 'Error sending link: ' + error.message);
+                        statusEl.textContent = 'Authentication failed.';
+                    } else {
+                        showMessage('Success!', 'Check your email for the sign-in link.');
+                        statusEl.textContent = 'Magic link sent successfully.';
+                    }
+                }
+            );
+        });
 
-  if (insertError) {
-    status.textContent = "DB error: " + insertError.message;
-    return;
-  }
+        // Initial load and auth state listener
+        updateUserInfo();
+        supabase.auth.onAuthStateChange((event, session) => {
+            updateUserInfo();
+        });
 
-  status.textContent = 'Guest registered successfully.';
-  e.target.reset();
-});
+
+        // Guest form submission
+        guestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const { data: userData } = await supabase.auth.getUser();
+            if (!userData.user) {
+                showMessage('Authentication Required', 'Please sign in first to register a guest.');
+                return;
+            }
+            
+            // This will be updated to show either upload success or failure
+            statusEl.textContent = 'Processing registration and upload...'; 
+            statusEl.classList.remove('text-red-500', 'text-green-600');
+            statusEl.classList.add('text-gray-600');
+
+            const file = document.getElementById('id_file').files[0];
+            const full_name = document.getElementById('full_name').value;
+            const email = document.getElementById('email').value || null;
+            const phone = document.getElementById('phone').value || null;
+            const id_type = document.getElementById('id_type').value;
+
+            const userId = userData.user.id; // User who is registering the guest
+
+            const timestamp = Date.now();
+            // Replace non-word characters (except periods and dashes) and spaces with an underscore for a safe filename
+            const safeFileName = file.name.replace(/[^\w\.\-]/g, '_');
+            const path = `${userId}/${timestamp}_${safeFileName}`;
+
+            // --- 1. Upload file (Check for ID proof upload status here) ---
+            const { data: uploadData, error: uploadError } = await supabase
+                .storage.from('id_proofs')
+                .upload(path, file, {
+                    cacheControl: '3600',
+                    upsert: false 
+                });
+
+            if (uploadError) {
+                // Displays if ID proof upload failed
+                statusEl.textContent = "Upload failed: " + uploadError.message;
+                statusEl.classList.add('text-red-500');
+                showMessage('Upload Error', 'Failed to upload ID proof: ' + uploadError.message);
+                return;
+            }
+
+            // --- 2. Insert DB row ---
+            const { error: insertError } = await supabase
+                .from('guests')
+                .insert([{
+                    full_name,
+                    email,
+                    phone,
+                    id_type,
+                    id_proof_path: uploadData.path,
+                    created_by: userId,
+                    consent: { accepted_at: new Date().toISOString(), text: "Guest registered by user." }
+                }]);
+
+            if (insertError) {
+                statusEl.textContent = "DB error: " + insertError.message;
+                statusEl.classList.add('text-red-500');
+                showMessage('Database Error', 'Failed to register guest in database: ' + insertError.message);
+                return;
+            }
+
+            // Displays if both ID proof upload and DB insert succeeded
+            statusEl.textContent = 'Guest registered successfully!';
+            statusEl.classList.add('text-green-600');
+            showMessage('Success', 'The guest has been successfully registered and the ID proof uploaded.');
+            e.target.reset(); // Clear the form
+        });
+    } else {
+        // Fallback in case of an extreme failure, though 'defer' should prevent it.
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = "Critical: Supabase library failed to load, even with 'defer'. Check network.";
+        statusEl.classList.add('text-red-500');
+    }
+};
 </script>
 </body>
 </html>
