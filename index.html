@@ -91,10 +91,12 @@
                 <table class="min-w-full divide-y divide-green-200">
                     <thead class="bg-green-100">
                         <tr>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider rounded-tl-lg">Reg ID</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Name</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Phone</th>
-                            <th class="px-3 py-3 text-center text-xs font-medium text-green-700 uppercase tracking-wider rounded-tr-lg">Proof</th>
+                            <!-- NEW COLUMN FOR IST TIME (using the new saved string field) -->
+                            <th class="px-3 py-2 text-left text-xs font-medium text-green-700 uppercase tracking-wider rounded-tl-lg">Date/Time (IST)</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Reg ID</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Name</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Phone</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-green-700 uppercase tracking-wider rounded-tr-lg">Proof</th>
                         </tr>
                     </thead>
                     <tbody id="guest-list-body" class="bg-white divide-y divide-gray-200">
@@ -168,6 +170,65 @@
         const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; 
 
         // --- Utility Functions ---
+        
+        /** Converts the current time to an IST formatted string for saving. */
+        function getISTTimeString() {
+            const now = new Date();
+            // Options for IST (Asia/Kolkata)
+            const options = {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true,
+                timeZone: 'Asia/Kolkata' // India Standard Time
+            };
+
+            try {
+                // Format: 16/10/2025, 12:40:00 am IST
+                const formatter = new Intl.DateTimeFormat('en-IN', options);
+                return formatter.format(now) + ' IST';
+            } catch (e) {
+                // Fallback
+                return now.toLocaleString('en-IN', options) + ' IST';
+            }
+        }
+        
+        /** * Takes a user-provided YYYY-MM-DD date and converts it into a UTC timestamp string 
+         * that correctly accounts for the IST offset (+5:30) for filtering.
+         * * @param {string} dateString - The user's input date (YYYY-MM-DD).
+         * @param {boolean} isEnd - If true, calculates the timestamp for the end of the IST day (23:59:59.999).
+         * @returns {string|null} The formatted UTC ISO string for the Supabase query, or null on error.
+         */
+        function getAdjustedUTCFilterString(dateString, isEnd) {
+            // Create Date object by interpreting the input as YYYY-MM-DD IST time 
+            let date = new Date(dateString); 
+            
+            if (isNaN(date.getTime())) {
+                console.error("Invalid date string:", dateString);
+                return null; 
+            }
+            
+            // IST is UTC + 5 hours 30 minutes. We need to subtract this offset to find the corresponding UTC time.
+            const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; 
+
+            if (isEnd) {
+                // For the end date: Set to 23:59:59.999 IST
+                date.setHours(23, 59, 59, 999);
+            } else {
+                // For the start date: Set to 00:00:00.000 IST
+                date.setHours(0, 0, 0, 0); 
+            }
+            
+            // Adjust to UTC by subtracting the IST offset
+            // We use getTime() and setTime() to manipulate the UTC value directly.
+            date.setTime(date.getTime() - IST_OFFSET_MS);
+            
+            // Return the ISO string (which ends with 'Z' for UTC)
+            return date.toISOString();
+        }
 
         /** Displays temporary status message */
         function showStatus(message, isError = false) {
@@ -374,11 +435,14 @@
                 // Helper function to create a cell with a placeholder bar
                 const createSkeletonCell = (widthClass) => {
                     const cell = row.insertCell();
-                    cell.className = 'px-3 py-4 whitespace-nowrap';
+                    cell.className = 'px-3 py-2 whitespace-nowrap';
                     cell.innerHTML = `<div class="h-4 bg-gray-200 rounded ${widthClass}"></div>`;
                     return cell;
                 };
 
+                // Date/Time
+                createSkeletonCell('w-4/5');
+                
                 // Reg ID
                 createSkeletonCell('w-1/3');
                 
@@ -390,7 +454,7 @@
 
                 // Proof (centered placeholder)
                 const proofCell = row.insertCell();
-                proofCell.className = 'px-3 py-4 whitespace-nowrap text-center';
+                proofCell.className = 'px-3 py-2 whitespace-nowrap text-center'; 
                 proofCell.innerHTML = '<div class="h-4 bg-gray-200 rounded w-4/5 mx-auto"></div>';
 
                 body.appendChild(row);
@@ -426,18 +490,25 @@
             showLoadingSkeleton();
             
             let query = supabase
+                // NOTE: We must select the new 'created_at_ist' field as well
                 .from('guests')
-                .select('*');
+                .select('id, reg_id, guest_name, phone_number, id_proof_url, created_at, created_at_ist');
             
-            // Apply date filters if provided
+            // --- UPDATED FILTERING LOGIC ---
             if (startDate) {
-                // We append T00:00:00.000Z to the date input to compare at the start of the day
-                query = query.gte('created_at', `${startDate}T00:00:00.000Z`);
+                // Adjusts the IST start date (00:00:00) backward by 5.5 hours to find the equivalent UTC time
+                const utcStart = getAdjustedUTCFilterString(startDate, false);
+                if (utcStart) {
+                    query = query.gte('created_at', utcStart);
+                }
             }
             
             if (endDate) {
-                // We append T23:59:59.999Z to the date input to compare up to the end of the day
-                query = query.lte('created_at', `${endDate}T23:59:59.999Z`);
+                // Adjusts the IST end date (23:59:59.999) backward by 5.5 hours to find the equivalent UTC time
+                const utcEnd = getAdjustedUTCFilterString(endDate, true);
+                if (utcEnd) {
+                    query = query.lte('created_at', utcEnd);
+                }
             }
 
             // Always order by created_at descending
@@ -473,24 +544,37 @@
                 const row = body.insertRow();
                 row.className = 'hover:bg-gray-50';
 
-                // Reg ID
-                row.insertCell().textContent = guest.reg_id;
+                // 1. Date/Time (IST) - Using the new saved string field
+                const timeCell = row.insertCell();
+                timeCell.className = 'px-3 py-2 whitespace-nowrap text-xs'; 
+                // Display the pre-calculated and saved IST timestamp string
+                timeCell.textContent = guest.created_at_ist || 'N/A';
                 
-                // Guest Name
-                row.insertCell().textContent = guest.guest_name;
+                // 2. Reg ID
+                const regIdCell = row.insertCell();
+                regIdCell.className = 'px-3 py-2 whitespace-nowrap text-xs'; 
+                regIdCell.textContent = guest.reg_id;
                 
-                // Phone
-                row.insertCell().textContent = guest.phone_number;
+                // 3. Guest Name
+                const nameCell = row.insertCell();
+                nameCell.className = 'px-3 py-2 whitespace-nowrap text-xs'; 
+                nameCell.textContent = guest.guest_name;
                 
-                // ID Proof (Link to URL)
+                // 4. Phone
+                const phoneCell = row.insertCell();
+                phoneCell.className = 'px-3 py-2 whitespace-nowrap text-xs';
+                phoneCell.textContent = guest.phone_number;
+                
+                // 5. ID Proof (Link to URL)
                 const idCell = row.insertCell();
-                idCell.className = 'px-3 py-4 whitespace-nowrap text-center text-sm font-medium';
+                idCell.className = 'px-3 py-2 whitespace-nowrap text-center text-xs font-medium'; 
                 
                 if (guest.id_proof_url) {
                     const button = document.createElement('button');
                     button.textContent = 'Download Proof';
                     button.onclick = () => downloadFile(guest.id_proof_url); // Call download function on click
-                    button.className = 'text-blue-600 hover:text-blue-800 font-semibold underline bg-transparent border-none p-0 cursor-pointer';
+                    // Ensured text-xs on the button as well
+                    button.className = 'text-blue-600 hover:text-blue-800 font-semibold underline bg-transparent border-none p-0 cursor-pointer text-xs';
                     idCell.appendChild(button);
                 } else {
                     idCell.textContent = 'N/A';
@@ -554,8 +638,11 @@
                 // 4. Generate unique REG ID
                 const regIdBase = Math.random().toString(36).substring(2, 7).toUpperCase();
                 const regId = `REG-${new Date().getFullYear()}-${regIdBase}`;
+                
+                // 5. Calculate IST time string for persistent saving
+                const istTimeString = getISTTimeString();
 
-                // 5. Insert Record into Database
+                // 6. Insert Record into Database
                 document.getElementById('register-button').textContent = 'Saving Registration Record...';
                 
                 // RLS Policy 1 (INSERT) for the table allows 'anon' to insert the record.
@@ -567,6 +654,7 @@
                             phone_number: phone, 
                             id_proof_url: idProofUrl, // Store the URL
                             reg_id: regId,
+                            created_at_ist: istTimeString // NEW FIELD: Saving the IST string
                         }
                     ]);
 
