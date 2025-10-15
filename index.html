@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Guest Registration</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, Arial; padding: 20px; max-width: 700px; margin: auto; }
+    input, select { width: 100%; padding: 6px; margin: 4px 0; }
+    button { padding: 10px 20px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Guest Registration</h1>
+
+  <div id="auth-area">
+    <button id="signup-btn">Sign in / Sign up (email)</button>
+    <span id="user-info"></span>
+  </div>
+
+  <form id="guestForm">
+    <label>Full name<br><input id="full_name" required /></label><br>
+    <label>Email (optional)<br><input id="email" type="email" /></label><br>
+    <label>Phone<br><input id="phone" /></label><br>
+    <label>ID type<br>
+      <select id="id_type">
+        <option>Aadhaar</option>
+        <option>PAN</option>
+        <option>Passport</option>
+      </select>
+    </label><br>
+    <label>Upload ID proof (image or PDF)<br><input id="id_file" type="file" accept="image/*,.pdf" required /></label><br>
+    <button type="submit">Register Guest</button>
+  </form>
+
+  <p id="status"></p>
+
+<script>
+const SUPABASE_URL = "https://hsyydplvjavkzksmwahy.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_uhkMvHhagzi2aRBPj5r4rQ_70-LfLrS";
+const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const status = document.getElementById('status');
+const userInfo = document.getElementById('user-info');
+const signupBtn = document.getElementById('signup-btn');
+
+async function updateUserInfo(){
+  const { data } = await supabase.auth.getUser();
+  if (data.user) {
+    userInfo.textContent = "Signed in: " + (data.user.email || data.user.id);
+    signupBtn.style.display = 'none';
+  } else {
+    userInfo.textContent = "Not signed in";
+    signupBtn.style.display = 'inline-block';
+  }
+}
+
+signupBtn.addEventListener('click', async () => {
+  const email = prompt('Enter email for sign-in (magic link):');
+  if (!email) return;
+  const { error } = await supabase.auth.signInWithOtp({ email });
+  if (error) alert('Auth error: ' + error.message);
+  else alert('Check your email for the sign-in link.');
+});
+
+updateUserInfo();
+supabase.auth.onAuthStateChange((event, session) => {
+  updateUserInfo();
+});
+
+document.getElementById('guestForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  status.textContent = 'Working...';
+
+  const file = document.getElementById('id_file').files[0];
+  const full_name = document.getElementById('full_name').value;
+  const email = document.getElementById('email').value || null;
+  const phone = document.getElementById('phone').value || null;
+  const id_type = document.getElementById('id_type').value;
+
+  const { data: userData } = await supabase.auth.getUser();
+  let userId = userData.user ? userData.user.id : crypto.randomUUID();
+
+  const timestamp = Date.now();
+  const safeFileName = file.name.replace(/\s+/g, '_');
+  const path = `${userId}/${timestamp}_${safeFileName}`;
+
+  const { data: uploadData, error: uploadError } = await supabase
+    .storage.from('id_proofs')
+    .upload(path, file);
+
+  if (uploadError) {
+    status.textContent = "Upload failed: " + uploadError.message;
+    return;
+  }
+
+  const { error: insertError } = await supabase
+    .from('guests')
+    .insert([{
+      full_name,
+      email,
+      phone,
+      id_type,
+      id_proof_path: uploadData.path,
+      created_by: userId,
+      consent: { accepted_at: new Date().toISOString(), text: "Guest registration" }
+    }]);
+
+  if (insertError) {
+    status.textContent = "DB error: " + insertError.message;
+    return;
+  }
+
+  status.textContent = 'Guest registered successfully.';
+  e.target.reset();
+});
+</script>
+</body>
+</html>
